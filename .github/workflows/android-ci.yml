@@ -1,0 +1,62 @@
+name: Android CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, feature/termux-agent-room]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Validate Termux scripts
+        run: |
+          bash -n termux/codein-bootstrap.sh
+          python3 -m py_compile termux/server.py termux/with-key.py termux/test_mcp.py
+          python3 -m unittest termux/test_mcp.py
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android 36 toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="${ANDROID_HOME:-}/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            SDKMANAGER="$(command -v sdkmanager || true)"
+          fi
+          [[ -x "$SDKMANAGER" ]] || { echo "Android sdkmanager was not found"; exit 1; }
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          # This repo's checked-in wrapper JAR is not in Gradle's published checksum catalog.
+          # Regenerate it from the runner's trusted Gradle installation before executing it.
+          validate-wrappers: false
+
+      - name: Regenerate trusted Gradle wrapper
+        run: gradle wrapper --gradle-version 9.3.1 --distribution-type bin
+
+      - name: Build debug APK
+        run: bash ./gradlew --no-daemon :app:assembleDebug
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Codein-Termux-Agent-Room-debug
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

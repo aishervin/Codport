@@ -1,0 +1,6 @@
+{
+  "name": "Codein",
+  "description": "SHΞN™ Coder Android client with a custom dark workspace and streaming chat",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["STREAMING_CHAT", "CUSTOM_COMPOSE_UI"]
+}
